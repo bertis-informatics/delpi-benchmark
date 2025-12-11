@@ -1,0 +1,31 @@
+parameters:
+  general:
+    export: peptides
+    fdr: 0.01
+    picker: True
+    xml_parser: openms
+  data_restriction:
+    pep_restriction: 0.9
+    peptide_length_restriction: 7
+    q_value_restriction: .9
+    custom_restriction: None
+    max_allowed_alternative_proteins: 50
+  score:
+    protein_score: multiplicative_log
+    psm_score: spec_e_value
+    psm_score_type: multiplicative
+  identifiers:
+    decoy_symbol: "XXX_"
+    isoform_symbol: "-"
+    reviewed_identifier_symbol: "sp|"
+  inference:
+    inference_type: parsimony
+    grouping_type: parsimonious_grouping
+  digest:
+    digest_type: trypsin
+    missed_cleavages: 1
+  parsimony:
+    lp_solver: pulp
+    shared_peptides: all
+  peptide_centric:
+    max_identifiers: 5
