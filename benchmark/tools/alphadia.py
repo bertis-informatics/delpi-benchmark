@@ -44,30 +44,6 @@ class AlphaDIAReader(BaseToolReader):
             "score": "score",
         }
 
-        # base_dir = Path(r"/data1/benchmark/DIA/2022-NeatPlasma")
-        base_dir = Path(r"/data1/benchmark/DIA/2025-SCP")
-        df = pl.read_csv(
-            base_dir / r"alphadia/precursors.tsv",
-            separator="\t",
-            schema_overrides={
-                "mod_seq_hash": pl.String,
-                "mod_seq_charge_hash": pl.String,
-            },
-        )
-        output_dir = base_dir / "alphadia"
-
-        # df.select(pl.col("run", "candidate_idx", "score", "proba")).filter(pl.col("candidate_idx") == 687799).sort("run")
-        # df.select(pl.col("run", "candidate_idx", "score", "proba")).filter(pl.col("candidate_idx") == 687799).sort("run")
-
-        # pg_df = pl.read_csv(
-        #     base_dir / r"alphadia/pg.matrix.tsv",
-        #     # r"/data1/benchmark/DIA/2025-SCP/alphadia/pg.matrix.tsv",
-        #     separator="\t",
-        # )
-        # pg_df["pg"].shape[0]
-        # df.filter(pl.col("pg_qval") <= 0.01)["pg"].n_unique()
-        # df.filter(pl.col("qval") <= 0.01)["precursor_idx"].n_unique()
-
         dfs = [
             pl.read_parquet(psm_path)
             for psm_path in output_dir.glob("quant/**/psm.parquet")
