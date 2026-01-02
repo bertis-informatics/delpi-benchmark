@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "delpi"
+name = "delpi-benchmark"
 version = "0.1.0"
-description = "DelPi: Deep Learning for Peptide Identification"
+description = "Reproducible benchmark analysis for DelPi peptide identification study"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "Jungkap Park", email = "jungkap.park@bertis.com"}
 ]
-keywords = ["mass spectrometry", "proteomics", "deep learning", "peptide identification"]
+keywords = ["mass spectrometry", "proteomics", "benchmark", "peptide identification", "data analysis"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -23,74 +23,32 @@ classifiers = [
 ]
 
 dependencies = [
-    # PyTorch excluded from dependencies - install separately for CUDA support
-    # "torch",
-    "torchmetrics>=1.4.2", 
-    "lightning>=2.5.0",
-    "timm==1.0.9",
     "polars[numpy,pandas]",
     "numpy",
     "pandas",
-    "pyarrow",
     "scipy",
-    "scikit-learn",
     "matplotlib",
-    "numba",
-    "h5py",
-    "tables",
-    "tqdm",
-    "pyyaml",
-    "python-dotenv",
-    "psutil",
+    "matplotlib_venn",
     "fastaparser",
-    "lxml",
-    "isal",
-    "tabulate",
-    "grpcio>=1.44.0",
-    "grpcio-tools>=1.44.0",
-    "protobuf>=4.21",
+    "pyproteininference",
 ]
 
 [project.optional-dependencies]
-# PyTorch CPU version (use only if you don't need CUDA)
-torch-cpu = [
-    "torch",
-]
-# For CUDA support, install PyTorch manually first:
-# Visit https://pytorch.org/get-started/locally/ for the correct command
-test = [
-    "pytest",
-    "pytest-cov",
-]
 dev = [
     "pytest",
     "pytest-cov",
     "black",
     "flake8",
-    "mypy",
 ]
 
-[project.scripts]
-delpi = "delpi.run:main"
-
 [project.urls]
-Homepage = "https://github.com/your-org/delpi"
-Repository = "https://github.com/your-org/delpi"
-Documentation = "https://delpi.readthedocs.io"
+Homepage = "https://github.com/your-org/delpi-benchmark"
+Repository = "https://github.com/your-org/delpi-benchmark"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["delpi*", "bmsio*"]
-exclude = ["tests*", "lightning_logs*", "lightning_logs_bak*", "temp*"]
-
-[tool.setuptools.package-data]
-delpi = [
-    "../data/**/*",
-    "../models/**/*",
-]
-bmsio = [
-    "bin/**/*",
-]
+include = ["benchmark*"]
+exclude = ["tests*", "temp*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -101,7 +59,7 @@ addopts = "-v --tb=short"
 
 [tool.black]
 line-length = 88
-target-version = ['py38']
+target-version = ['py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -114,8 +72,6 @@ extend-exclude = '''
   | \.venv
   | build
   | dist
-  | lightning_logs
-  | lightning_logs_bak
   | temp
 )/
 '''
@@ -128,7 +84,5 @@ exclude = [
     "__pycache__",
     "build",
     "dist",
-    "lightning_logs",
-    "lightning_logs_bak", 
     "temp",
 ]

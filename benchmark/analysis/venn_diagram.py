@@ -5,15 +5,14 @@ from matplotlib import pyplot as plt
 from matplotlib_venn import venn2, venn3
 
 from benchmark.dataset import datasets
-from benchmark.result_reader import tool_display_name_map, tool_color_map, ResultReader
+from benchmark.result_reader import ResultReader
+from benchmark.constant import tool_color_map, tool_display_name_map
 from delpi.utils.fdr import calculate_q_value
+from benchmark import PROJECT_DIR
 
 
-def gen_venn_diagrams_by_plain_peptide(ds_name):
-    # venn diagram
-    # ds_name = "2023-LFQ-single-run"
-    # ds_name = "CPTAC_LUAD_Phospho"
-    ds_name = "2024-Mouse-Phospho"
+def generate_venn_diagrams_by_plain_peptide(save_dir, ds_name):
+
     reader = ResultReader(ds_name)
     results_dict = reader.load()
 
@@ -23,11 +22,7 @@ def gen_venn_diagrams_by_plain_peptide(ds_name):
     for tool, df in results_dict.items():
         if tool == "diabert":
             continue
-        # q_val_col = (
-        #     "global_precursor_q_value"
-        #     if tool.startswith("diann")
-        #     else "global_peptide_q_value"
-        # )
+
         pep_df = df.with_columns(
             pl.col("modified_sequence")
             .str.replace_all(r"\([^)]*\)", "")
@@ -77,13 +72,11 @@ def gen_venn_diagrams_by_plain_peptide(ds_name):
         raise ValueError(
             f"Expected 2 or 3 tool result sets, got {len(set_list)}: {set_labels}"
         )
-    plt.savefig(rf"./benchmark/figures/{ds_name}_venn_diagram_plain_pep.png")
+
+    plt.savefig(save_dir / f"{ds_name}_venn_diagram_plain_pep.png")
 
 
-def gen_venn_diagrams(ds_name):
-    # venn diagram
-    # ds_name = "2023-LFQ-single-run"
-    ds_name = "CPTAC_LUAD_Phospho"
+def generate_venn_diagrams(save_dir, ds_name):
     reader = ResultReader(ds_name)
     results_dict = reader.load()
 
@@ -119,10 +112,18 @@ def gen_venn_diagrams(ds_name):
         raise ValueError(
             f"Expected 2 or 3 tool result sets, got {len(set_list)}: {set_labels}"
         )
-    plt.savefig(rf"./benchmark/figures/{ds_name}_venn_diagram.png")
+    plt.savefig(save_dir / f"{ds_name}_venn_diagram.png")
 
 
 def venn_diagrams_all():
+    save_dir = PROJECT_DIR / "reports/figures"
+
+    save_dir.mkdir(exist_ok=True, parents=True)
+
     for ds_name in list(datasets):
         print(ds_name)
-        gen_venn_diagrams(ds_name)
+        generate_venn_diagrams(save_dir, ds_name)
+
+    for ds_name in list(datasets):
+        print(ds_name)
+        generate_venn_diagrams_by_plain_peptide(save_dir, ds_name)

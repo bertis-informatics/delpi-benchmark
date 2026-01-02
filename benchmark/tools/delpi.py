@@ -1,13 +1,9 @@
 import polars as pl
-from pathlib import Path
-from typing import Dict, Any, Union
 
-from delpi.chem.modification import Modification
 from delpi.database.utils import get_modified_sequence
 from delpi.search.config import SearchConfig
-from delpi.search.result_manager import ResultManager
 from benchmark.tools.base import BaseToolReader
-from delpi import PROJECT_DIR
+from benchmark import PROJECT_DIR
 
 
 class DelPiReader(BaseToolReader):

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, Union
 
 from benchmark.tools.base import BaseToolReader
-from delpi import PROJECT_DIR
+from benchmark import PROJECT_DIR
 from delpi.utils.fdr import calculate_q_value
 
 

@@ -4,7 +4,7 @@ from typing import Dict, Any, Union
 
 from delpi.chem.modification import Modification
 from delpi.utils.fdr import calculate_q_value
-from delpi import PROJECT_DIR
+from benchmark import PROJECT_DIR
 from benchmark.tools.base import BaseToolReader
 
 

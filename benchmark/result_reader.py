@@ -1,55 +1,12 @@
 import polars as pl
 import pandas as pd
 from pathlib import Path
-from matplotlib import pyplot as plt
-from matplotlib_venn import venn2, venn3
 
+from benchmark.dataset import tools
+from benchmark.dataset import datasets
+from benchmark.constant import tool_to_reader_class
 from delpi.database.fasta_parser import FastaParser
 from delpi.search.config import SearchConfig
-from benchmark.dataset import tools
-from benchmark.tools.msgf import MSGFReader
-from benchmark.tools.sage import SageReader
-from benchmark.tools.diann import DIANNReader
-from benchmark.tools.alphadia import AlphaDIAReader
-from benchmark.tools.diabert import DIABertReader
-from benchmark.tools.delpi import DelPiReader
-from benchmark.dataset import datasets
-
-tool_to_reader_class = {
-    "msgf": MSGFReader,
-    "sage": SageReader,
-    "diann-1.8.1": DIANNReader,
-    "alphadia": AlphaDIAReader,
-    "diabert": DIABertReader,
-    "delpi": DelPiReader,
-}
-
-tool_color_map = {
-    "delpi": "#004E98",
-    "diann-1.8.1": "#E94F37",
-    "alphadia": "#F79256",
-    "diabert": "#F9C74F",
-    "sage": "#008B8B",
-    "msgf": "#8CC64D",
-}
-
-tool_display_name_map = {
-    "delpi": "DelPi",
-    "diann-1.8.1": "DIA-NN",
-    "alphadia": "AlphaDIA",
-    "diabert": "DIA-BERT",
-    "sage": "Sage",
-    "msgf": "MS-GF+",
-}
-
-
-def protein_groups(df) -> pl.DataFrame:
-    df = df.filter(pl.col("is_decoy") == False)
-    return (
-        df.filter(pl.col("global_protein_group_q_value") <= 0.01)["protein_group"]
-        .unique()
-        .to_list()
-    )
 
 
 class ResultReader:
@@ -72,8 +29,7 @@ class ResultReader:
         self.search_config = SearchConfig(ds_dir / "delpi/params.yaml")
         fasta_file = self.search_config.fasta_file
         fasta_parser = FastaParser(fasta_file)
-        # fasta_parser = FastaParser(Path(f"/data1/FASTA/") / dataset_config["fasta"])
-        # fasta_parser = FastaParser(r"/data1/FASTA/2022-02-18-reviewed-UP000005640-UP000000625.fas")
+
         seq_df = fasta_parser.parse()
         self.seq_df = seq_df.with_columns(
             pl.col("fasta_id").str.split("|").list.get(0).alias("db"),
@@ -108,12 +64,6 @@ class ResultReader:
             results_dict[tool] = df
 
         return results_dict
-
-    # @property
-    # def entrapment_ratio(self):
-    #     if self._entrapment_ratio is None:
-    #         self._entrapment_ratio = self.estimate_entrapment_ratio()
-    #     return self._entrapment_ratio
 
     def estimate_entrapment_ratio(self):
         search_config = self.search_config
@@ -159,8 +109,6 @@ class ResultReader:
             .filter(~pl.col("target_entrapment_overlap"))
         )
 
-        # pep_df = pep_df.filter(~exclude_filter)
-
         # peptide or precursor level entrapment ratio
         N = pep_df.shape[0]
         E = pep_df.filter(pl.col("fasta_id").str.contains(entrap_db)).shape[0]
@@ -193,17 +141,17 @@ class ResultReader:
             tmp_df = tmp_df.filter(~exclude_filter).with_columns(
                 is_fp=pl.col("fasta_id").str.contains(entrap_db)
             )
+            tmp_df = tmp_df.unique(
+                [
+                    "modified_sequence",
+                    "precursor_charge",
+                    "is_fp",
+                    "global_precursor_q_value",
+                ]
+            )
 
-            T = (
-                tmp_df.filter(~pl.col("is_fp"))
-                .unique(["modified_sequence", "precursor_charge"])
-                .shape[0]
-            )
-            E = (
-                tmp_df.filter(pl.col("is_fp"))
-                .unique(["modified_sequence", "precursor_charge"])
-                .shape[0]
-            )
+            T = tmp_df.filter(~pl.col("is_fp")).shape[0]
+            E = tmp_df.filter(pl.col("is_fp")).shape[0]
             fdp_lb = E / (T + E)
             fdp_comb = (E * (1 + 1 / pep_r)) / (T + E)
 
@@ -231,9 +179,10 @@ class ResultReader:
                 .list.eval(pl.element().str.contains(entrap_db))
                 .list.all()
             )
+            tmp_df = tmp_df.unique(["protein_group", "is_fp"])
+            T = tmp_df.filter(~pl.col("is_fp")).shape[0]
+            E = tmp_df.filter(pl.col("is_fp")).shape[0]
 
-            T = tmp_df.filter(~pl.col("is_fp"))["protein_group"].n_unique()
-            E = tmp_df.filter(pl.col("is_fp"))["protein_group"].n_unique()
             fdp_lb = E / (T + E)
             fdp_comb = (E * (1 + 1 / prot_r)) / (T + E)
             assert num_protein_groups == T + E
@@ -249,65 +198,3 @@ class ResultReader:
             .rename(columns={"index": "tool"})
         )
         return pl.from_pandas(summary_df)
-
-
-def perform_benchmark_analysis():
-
-    stats_dict = dict()
-    for ds_name in list(datasets):
-        print(ds_name)
-        reader = ResultReader(ds_name)
-        results_dict = reader.save()
-        # results_dict = reader.load()
-        summary_df = reader.generate_summary(results_dict)
-        stats_dict[ds_name] = summary_df
-
-    for ds_name, df in stats_dict.items():
-        df.write_csv(r"/data1/benchmark/" + f"{ds_name}_result_summary.csv")
-
-
-def gen_venn_diagrams(ds_name):
-    # venn diagram
-    # ds_name = "2023-LFQ-single-run"
-    reader = ResultReader(ds_name)
-    results_dict = reader.load()
-
-    set_list = []
-    set_labels = []
-    set_colors = []
-    for tool, df in results_dict.items():
-        if tool == "diabert":
-            continue
-        q_val_col = (
-            "global_precursor_q_value"
-            if tool.startswith("diann")
-            else "global_peptide_q_value"
-        )
-
-        tmp_df = df.filter((pl.col("is_decoy") == False) & (pl.col(q_val_col) <= 0.01))
-        modified_sequences = set(tmp_df["modified_sequence"].unique())
-        set_list.append(modified_sequences)
-        set_labels.append(tool_display_name_map[tool])
-        set_colors.append(tool_color_map[tool])
-
-    plt.figure()
-    # Draw venn2 or venn3 depending on number of tools included
-    if len(set_list) == 3:
-        venn_obj = venn3(
-            set_list, set_labels=set_labels, set_colors=set_colors, alpha=0.8
-        )
-    elif len(set_list) == 2:
-        venn_obj = venn2(
-            set_list, set_labels=set_labels, set_colors=set_colors, alpha=0.8
-        )
-    else:
-        raise ValueError(
-            f"Expected 2 or 3 tool result sets, got {len(set_list)}: {set_labels}"
-        )
-    plt.savefig(rf"./benchmark/figures/{ds_name}_venn_diagram.png")
-
-
-def venn_diagrams_all():
-    for ds_name in list(datasets):
-        print(ds_name)
-        gen_venn_diagrams(ds_name)

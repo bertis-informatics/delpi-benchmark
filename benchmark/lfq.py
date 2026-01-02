@@ -2,12 +2,12 @@ from pathlib import Path
 import polars as pl
 
 from benchmark.result_reader import ResultReader
+from benchmark import PROJECT_DIR
 from delpi.search.dia.max_lfq import maxlfq
-from delpi.search.result_aggregator import ResultsAggregator
 
 
 def read_lfq_experiment_design_df():
-    exp_df = pl.read_csv(r"./benchmark/lfq_files.tsv", separator="\t")
+    exp_df = pl.read_csv(PROJECT_DIR / r"data/lfq_files.tsv", separator="\t")
     exp_df = exp_df.select(
         pl.col("File name").str.replace_all(".raw", "").alias("run_name"),
         pl.col("Experiment design").alias("experiment_design"),
@@ -159,7 +159,9 @@ def compute_lfq_stats(
     return counts_df, cv_df, box_stats_df
 
 
-def example_usage():
+def estimate_lfq_performance():
+
+    save_dir = PROJECT_DIR / "reports"
     exp_order = pl.DataFrame(
         [
             ("Ref", 0),
@@ -200,7 +202,8 @@ def example_usage():
         pl.col("cv_diann") * 100,
         pl.col("cv_delpi") * 100,
     ).write_csv(
-        r"/data1/benchmark/DIA/2023-LFQ/search_results/cv.tsv",
+        # r"/data1/benchmark/DIA/2023-LFQ/search_results/cv.tsv",
+        save_dir / "lfq_cv.tsv",
         separator="\t",
     )
 
@@ -215,12 +218,14 @@ def example_usage():
     )
 
     counts_df.write_csv(
-        r"/data1/benchmark/DIA/2023-LFQ/search_results/quantifiable_proteins.tsv",
+        save_dir / "lfq_quantifiable_proteins.tsv",
         separator="\t",
     )
 
 
 def estimate_absolute_error():
+
+    save_dir = PROJECT_DIR / "reports"
 
     exp_order = pl.DataFrame(
         [
@@ -330,14 +335,20 @@ def estimate_absolute_error():
         .sort("order")
     )
 
-    error_df2.group_by("experiment_design").agg(
-        pl.col("relative_error").median().alias("med_relative_error"),
-        pl.col("order").first(),
-    ).sort("order")["med_relative_error"] - error_df1.group_by("experiment_design").agg(
-        pl.col("relative_error").median().alias("med_relative_error"),
-        pl.col("order").first(),
-        
-    ).sort("order")["med_relative_error"]
+    (
+        error_df2.group_by("experiment_design")
+        .agg(
+            pl.col("relative_error").median().alias("med_relative_error"),
+            pl.col("order").first(),
+        )
+        .sort("order")["med_relative_error"]
+        - error_df1.group_by("experiment_design")
+        .agg(
+            pl.col("relative_error").median().alias("med_relative_error"),
+            pl.col("order").first(),
+        )
+        .sort("order")["med_relative_error"]
+    )
 
     err_df.with_columns(
         (pl.col("relative_error") * 100).alias("relative_error_diann"),
@@ -350,11 +361,6 @@ def estimate_absolute_error():
             "relative_error_delpi",
         )
     ).write_csv(
-        r"/data1/benchmark/DIA/2023-LFQ/search_results/absolute_error.tsv",
+        save_dir / "lfq_absolute_error.tsv",
         separator="\t",
     )
-
-
-# error_df2.filter(
-#     pl.col("experiment_design") == "1:4"
-# ).sort("relative_error").filter(pl.col("protein_group").str.contains("ARA"))
