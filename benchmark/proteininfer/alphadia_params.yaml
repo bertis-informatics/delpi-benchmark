@@ -11,12 +11,9 @@ parameters:
     custom_restriction: None
     max_allowed_alternative_proteins: 50
   score:
-    protein_score: multiplicative_log
+    protein_score: best_peptide_per_protein
     psm_score: posterior_error
     psm_score_type: multiplicative
-    # protein_score: additive
-    # psm_score_type: additive
-    # psm_score: score
   identifiers:
     decoy_symbol: "rev_"
     isoform_symbol: "-"

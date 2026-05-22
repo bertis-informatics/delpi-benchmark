@@ -11,7 +11,7 @@ parameters:
     custom_restriction: None
     max_allowed_alternative_proteins: 50
   score:
-    protein_score: multiplicative_log
+    protein_score: best_peptide_per_protein
     psm_score: spec_e_value
     psm_score_type: multiplicative
   identifiers:
