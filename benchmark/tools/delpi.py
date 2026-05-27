@@ -5,6 +5,13 @@ from delpi.search.config import SearchConfig
 from benchmark.tools.base import BaseToolReader
 from benchmark import PROJECT_DIR
 
+# def map_fasta_id(protein_index_list, is_decoy) -> str:
+#     if is_decoy:
+#         fasta_ids = [f"rev_{fasta_id_list[pid]}" for pid in protein_index_list]
+#     else:
+#         fasta_ids = [fasta_id_list[pid] for pid in protein_index_list]
+#     return ";".join(fasta_ids)
+
 
 class DelPiReader(BaseToolReader):
 
@@ -13,53 +20,33 @@ class DelPiReader(BaseToolReader):
     def read(self) -> pl.DataFrame:
 
         search_config = SearchConfig(self.output_dir / "params.yaml")
-        seq_df = pl.read_parquet(search_config.db_dir / "sequence_df.parquet")
+        results_file = search_config.output_dir / "pmsm_results.parquet"
 
-        fasta_id_list = seq_df["fasta_id"].to_list()
-
-        file_path = self.output_dir / "pmsm.bak.parquet"
-        df = pl.read_parquet(file_path).filter(pl.col("precursor_q_value") <= 0.01)
-
-        df = df.with_columns(
-            pl.col("peptide_index", "peptidoform_index"),
-            pl.when(pl.col("mod_ids").is_null())
-            .then(pl.col("peptide"))
-            .otherwise(
-                pl.struct(["peptide", "mod_ids", "mod_sites"]).map_elements(
-                    lambda x: get_modified_sequence(
-                        x["peptide"],
-                        x["mod_ids"],
-                        x["mod_sites"],
-                        use_unimod_id=True,
-                    ),
-                    return_dtype=pl.String,
-                ),
+        if results_file.exists():
+            df = pl.read_parquet(results_file)
+        else:
+            df = pl.read_csv(
+                search_config.output_dir / "pmsm_results.tsv", separator="\t"
             )
-            .alias("modified_sequence"),
+
+        # add prefix ("rev_") to decoys
+        df = df.with_columns(
+            pl.when(pl.col("is_decoy"))
+            .then(
+                pl.col("fasta_id")
+                .str.split(";")
+                .list.eval("rev_" + pl.element())
+                .list.join(";")
+            )
+            .otherwise(pl.col("fasta_id"))
+            .alias("fasta_id"),
         )
         df = df.with_columns(
             pl.col("modified_sequence")
             .str.replace_all(r"_", "")
             .str.replace_all(r"\.", ""),
-        ).with_columns(posterior_error=1 - (1 / (1 + (-pl.col("score")).exp())))
-
-        ## fasta_id mapping from protien_index
-        def map_fasta_id(protein_index_list, is_decoy) -> str:
-            if is_decoy:
-                fasta_ids = [f"rev_{fasta_id_list[pid]}" for pid in protein_index_list]
-            else:
-                fasta_ids = [fasta_id_list[pid] for pid in protein_index_list]
-            return ";".join(fasta_ids)
-
-        df = df.with_columns(
-            fasta_id=pl.struct(["protein_index", "is_decoy"]).map_elements(
-                lambda x: map_fasta_id(
-                    x["protein_index"],
-                    x["is_decoy"],
-                ),
-                return_dtype=pl.String,
-            ),
         )
+
         df = df.drop(
             [
                 "protein_group",
@@ -67,7 +54,8 @@ class DelPiReader(BaseToolReader):
                 "protein_group_q_value",
                 "global_protein_group_q_value",
                 "protein_index",
-            ]
+            ],
+            strict=False,
         )
 
         self.df = df

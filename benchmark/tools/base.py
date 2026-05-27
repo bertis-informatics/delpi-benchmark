@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Dict, Any, Union
 from abc import ABC, abstractmethod
 
-from pyproteininference.pipeline import ProteinInferencePipeline
 from delpi.utils.yaml_file import load_yaml
 
 
@@ -39,6 +38,7 @@ class BaseToolReader(ABC):
         pass
 
     def run_protein_inference(self) -> pl.DataFrame:
+        from pyproteininference.pipeline import ProteinInferencePipeline
 
         df = self.df
         output_dir = self.output_dir
@@ -68,6 +68,8 @@ class BaseToolReader(ABC):
             pipeline.execute()
 
         df = self.merge_protein_infer_results(output_file)
+        # df.filter(pl.col("global_protein_group_q_value") <= 0.01)["protein_group"].n_unique()
+
         self.df = df
 
         return df

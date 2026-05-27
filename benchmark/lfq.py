@@ -7,12 +7,50 @@ from delpi.search.dia.max_lfq import maxlfq
 
 
 def read_lfq_experiment_design_df():
+    ratio_dict = {
+        "1:4": "5%",
+        "1:2": "10%",
+        "2:3": "13%",
+        "1:1": "20%",
+        "3:2": "30%",
+        "2:1": "40%",
+        "Ref": "Ref",
+    }
+
     exp_df = pl.read_csv(PROJECT_DIR / r"data/lfq_files.tsv", separator="\t")
     exp_df = exp_df.select(
         pl.col("File name").str.replace_all(".raw", "").alias("run_name"),
         pl.col("Experiment design").alias("experiment_design"),
     )
+
+    exp_df = exp_df.with_columns(
+        pl.col("experiment_design")
+        .map_elements(lambda x: ratio_dict[x], return_dtype=pl.String)
+        .alias("ratio")
+    )
+
     return exp_df
+
+
+def get_exp_label_df():
+
+    return pl.DataFrame(
+        [
+            ("Ref", 0, "Ref"),
+            ("1:4", 1, "5%"),
+            ("1:2", 2, "10%"),
+            ("2:3", 3, "13%"),
+            ("1:1", 4, "20%"),
+            ("3:2", 5, "30%"),
+            ("2:1", 6, "40%"),
+        ],
+        orient="row",
+        schema={
+            "experiment_design": pl.String,
+            "order": pl.Int32,
+            "experiment_ratio": pl.String,
+        },
+    )
 
 
 def read_diann_pg_matrix():
@@ -58,8 +96,8 @@ def read_delpi_pg_matrix():
     )
 
     # Merge MS2 area info from final PMSM results
-    final_pmsm_df = pl.read_csv(
-        "/data1/benchmark/DIA/2023-LFQ/delpi/pmsm_results.tsv", separator="\t"
+    final_pmsm_df = pl.read_parquet(
+        "/data1/benchmark/DIA/2023-LFQ/delpi/pmsm_results.parquet"
     )
 
     pmsm_df = pmsm_df.join(
@@ -162,19 +200,7 @@ def compute_lfq_stats(
 def estimate_lfq_performance():
 
     save_dir = PROJECT_DIR / "reports"
-    exp_order = pl.DataFrame(
-        [
-            ("Ref", 0),
-            ("1:4", 1),
-            ("1:2", 2),
-            ("2:3", 3),
-            ("1:1", 4),
-            ("3:2", 5),
-            ("2:1", 6),
-        ],
-        orient="row",
-        schema={"experiment_design": pl.String, "order": pl.Int32},
-    )
+    exp_label_df = get_exp_label_df()
 
     pg_quant_df = read_diann_pg_matrix()
     counts_df1, cv_df1, box_stats_df1 = compute_lfq_stats(pg_quant_df)
@@ -192,13 +218,13 @@ def estimate_lfq_performance():
         how="full",
         coalesce=True,
     ).join(
-        exp_order, on="experiment_design", how="left"
+        exp_label_df, on="experiment_design", how="left"
     ).sort(
         "order"
     ).filter(
         pl.col("experiment_design") != "Ref"
     ).select(
-        pl.col("experiment_design", "protein_group"),
+        pl.col("experiment_ratio", "protein_group"),
         pl.col("cv_diann") * 100,
         pl.col("cv_delpi") * 100,
     ).write_csv(
@@ -213,7 +239,7 @@ def estimate_lfq_performance():
             counts_df2.rename({"quantifiable_proteins": "DelPi"}),
             on="experiment_design",
         )
-        .join(exp_order, on="experiment_design", how="left")
+        .join(exp_label_df, on="experiment_design", how="left")
         .sort("order")
     )
 
@@ -226,20 +252,7 @@ def estimate_lfq_performance():
 def estimate_absolute_error():
 
     save_dir = PROJECT_DIR / "reports"
-
-    exp_order = pl.DataFrame(
-        [
-            ("Ref", 0),
-            ("1:4", 1),
-            ("1:2", 2),
-            ("2:3", 3),
-            ("1:1", 4),
-            ("3:2", 5),
-            ("2:1", 6),
-        ],
-        orient="row",
-        schema={"experiment_design": pl.String, "order": pl.Int32},
-    )
+    exp_label_df = get_exp_label_df()
 
     exp_df = read_lfq_experiment_design_df()
     exp_df = exp_df.join(
@@ -302,7 +315,11 @@ def estimate_absolute_error():
                 / pl.col("true_ratio")
             ).alias("relative_error"),
         )
-        .join(exp_order, on="experiment_design", how="left")
+        .join(
+            exp_label_df.select(pl.col("experiment_design", "order")),
+            on="experiment_design",
+            how="left",
+        )
         .sort("order")
     )
 
@@ -319,7 +336,11 @@ def estimate_absolute_error():
                 / pl.col("true_ratio")
             ).alias("relative_error"),
         )
-        .join(exp_order, on="experiment_design", how="left")
+        .join(
+            exp_label_df.select(pl.col("experiment_design", "order")),
+            on="experiment_design",
+            how="left",
+        )
         .sort("order")
     )
 
@@ -331,31 +352,35 @@ def estimate_absolute_error():
             suffix="_delpi",
             coalesce=True,
         )
-        .join(exp_order, on="experiment_design", how="left")
+        .join(
+            exp_label_df.select(pl.col("experiment_design", "experiment_ratio")),
+            on="experiment_design",
+            how="left",
+        )
         .sort("order")
     )
 
-    (
-        error_df2.group_by("experiment_design")
-        .agg(
-            pl.col("relative_error").median().alias("med_relative_error"),
-            pl.col("order").first(),
-        )
-        .sort("order")["med_relative_error"]
-        - error_df1.group_by("experiment_design")
-        .agg(
-            pl.col("relative_error").median().alias("med_relative_error"),
-            pl.col("order").first(),
-        )
-        .sort("order")["med_relative_error"]
-    )
+    # (
+    #     error_df2.group_by("experiment_design")
+    #     .agg(
+    #         pl.col("relative_error").median().alias("med_relative_error"),
+    #         pl.col("order").first(),
+    #     )
+    #     .sort("order")["med_relative_error"]
+    #     - error_df1.group_by("experiment_design")
+    #     .agg(
+    #         pl.col("relative_error").median().alias("med_relative_error"),
+    #         pl.col("order").first(),
+    #     )
+    #     .sort("order")["med_relative_error"]
+    # )
 
     err_df.with_columns(
         (pl.col("relative_error") * 100).alias("relative_error_diann"),
         (pl.col("relative_error_delpi") * 100).alias("relative_error_delpi"),
     ).select(
         pl.col(
-            "experiment_design",
+            "experiment_ratio",
             "protein_group",
             "relative_error_diann",
             "relative_error_delpi",
